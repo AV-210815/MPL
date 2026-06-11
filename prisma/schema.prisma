@@ -1,0 +1,82 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id          Int      @id @default(autoincrement())
+  username    String   @unique
+  password    String
+  role        String   @default("user")      // "admin" | "user"
+  status      String   @default("pending")   // "pending" | "approved" | "rejected"
+  permissions String   @default("[]")        // JSON array of allowed path prefixes, ["*"] = all
+  createdAt   DateTime @default(now())
+}
+
+model Player {
+  id        Int               @id @default(autoincrement())
+  name      String            @unique
+  photo     String?
+  createdAt DateTime          @default(now())
+  batting   BattingStat[]
+  bowling   BowlingStat[]
+  memberships MatchTeamMember[]
+}
+
+model Match {
+  id           Int               @id @default(autoincrement())
+  date         DateTime
+  label        String?
+  format       String            @default("ODI")    // TEST | ODI | T20
+  team1Name    String            @default("Team 1")
+  team2Name    String            @default("Team 2")
+  battingFirst Int               @default(1)         // 1 or 2
+  result       String?                               // computed result string
+  createdAt    DateTime          @default(now())
+  batting      BattingStat[]
+  bowling      BowlingStat[]
+  members      MatchTeamMember[]
+}
+
+model MatchTeamMember {
+  id       Int    @id @default(autoincrement())
+  matchId  Int
+  playerId Int
+  team     Int    // 1 or 2
+  match    Match  @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  player   Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+}
+
+model BattingStat {
+  id       Int     @id @default(autoincrement())
+  playerId Int
+  matchId  Int
+  innings  Int     @default(1)
+  team     Int     @default(1)
+  runs     Int
+  balls    Int
+  fours    Int
+  sixes    Int
+  notOut   Boolean @default(false)
+  dnb      Boolean @default(false)
+  player   Player  @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  match    Match   @relation(fields: [matchId], references: [id], onDelete: Cascade)
+}
+
+model BowlingStat {
+  id           Int    @id @default(autoincrement())
+  playerId     Int
+  matchId      Int
+  innings      Int    @default(1)
+  team         Int    @default(1)
+  wickets      Int
+  overs        Float
+  runsConceded Int
+  maidens      Int
+  player       Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  match        Match  @relation(fields: [matchId], references: [id], onDelete: Cascade)
+}
