@@ -2,11 +2,12 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
 import ConditionalMain from "@/components/ConditionalMain";
-import { Bebas_Neue, Rajdhani, Oswald } from "next/font/google";
+import { Bebas_Neue, Rajdhani, Oswald, Bodoni_Moda } from "next/font/google";
 
 const bebasNeue = Bebas_Neue({ weight: "400", subsets: ["latin"], variable: "--font-bebas" });
 const rajdhani = Rajdhani({ weight: ["400", "600", "700"], subsets: ["latin"], variable: "--font-rajdhani" });
 const oswald = Oswald({ weight: ["400", "500", "600", "700"], subsets: ["latin"], variable: "--font-oswald" });
+const bodoni = Bodoni_Moda({ weight: ["400", "500", "600", "700", "800", "900"], style: ["normal", "italic"], subsets: ["latin"], variable: "--font-bodoni" });
 
 export const metadata: Metadata = {
   title: "MPL — Maple Premier League",
@@ -15,8 +16,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`h-full antialiased ${bebasNeue.variable} ${rajdhani.variable} ${oswald.variable}`}>
-      <body className="min-h-full flex flex-col bg-[#0d0d1a] text-gray-100">
+    <html lang="en" className={`h-full antialiased ${bebasNeue.variable} ${rajdhani.variable} ${oswald.variable} ${bodoni.variable}`}>
+      <body className="min-h-full flex flex-col bg-[#0d0d1a] text-gray-100" style={{ fontFamily: "var(--font-bodoni), serif" }}>
         <Navbar />
         <ConditionalMain>{children}</ConditionalMain>
       </body>

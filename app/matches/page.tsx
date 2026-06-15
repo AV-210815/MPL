@@ -2,16 +2,31 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import StumpsHit from "@/components/StumpsHit";
 
 interface Player { id: number; name: string }
 interface Member { team: number; player: Player }
-interface BattingStat { innings: number; team: number; player: Player; runs: number; balls: number; fours: number; sixes: number; notOut: boolean; dnb: boolean }
+interface BattingStat { innings: number; team: number; player: Player; runs: number; balls: number; fours: number; sixes: number; notOut: boolean; dnb: boolean; dismissal?: string | null }
+
+function formatDismissal(d: string | null | undefined, notOut: boolean): string | null {
+  if (notOut) return "not out";
+  if (!d) return null;
+  if (d === "obs") return "obstructing";
+  if (d === "hb") return "handled ball";
+  if (d === "ret out" || d === "ret") return "retired out";
+  if (d === "ro") return "run out";
+  if (d.startsWith("ro ")) return `run out (${d.slice(3)})`;
+  if (d === "hw") return "hit wicket";
+  if (d.startsWith("hw ")) return `hit wkt b ${d.slice(3)}`;
+  if (d === "lbw") return "lbw";
+  if (d.startsWith("lbw ")) return `lbw b ${d.slice(4)}`;
+  return d; // b, c, c&b, st already readable
+}
 interface BowlingStat { innings: number; team: number; player: Player; wickets: number; overs: number; runsConceded: number; maidens: number }
 interface Match {
-  id: number; date: string; label: string | null; format: string;
+  id: number; date: string; label: string | null; season: string | null; format: string;
   team1Name: string; team2Name: string; battingFirst: number;
   result: string | null;
+  potm: { id: number; name: string } | null;
   members: Member[]; batting: BattingStat[]; bowling: BowlingStat[];
 }
 
@@ -24,23 +39,31 @@ const formatConfig: Record<string, { badge: string; glow: string; dot: string }>
 export default function MatchesPage() {
   const router = useRouter();
   const [matches, setMatches] = useState<Match[]>([]);
+  const [allMatches, setAllMatches] = useState<Match[]>([]);
   const [date, setDate] = useState("");
+  const [season, setSeason] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [expanded, setExpanded] = useState<number | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    fetch("/api/auth/me").then((r) => r.ok ? r.json() : null).then((d) => setIsAdmin(d?.role === "admin"));
+    fetch("/api/auth/me").then((r) => r.ok ? r.json() : null).then((d) => setIsAdmin(d?.role === "admin" || d?.role === "superadmin"));
   }, []);
 
   async function load() {
     setLoading(true);
     setLoadError(false);
     try {
-      const res = await fetch(date ? `/api/matches?date=${date}` : "/api/matches");
+      const params = new URLSearchParams({ slug: "mpl" });
+      if (date) params.set("date", date);
+      if (season) params.set("season", season);
+      const res = await fetch(`/api/matches?${params.toString()}`);
       const data = await res.json();
-      setMatches(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setMatches(list);
+      // keep all-time list for building season options (only when no filters active)
+      if (!date && !season) setAllMatches(list);
     } catch {
       setLoadError(true);
     } finally {
@@ -48,7 +71,9 @@ export default function MatchesPage() {
     }
   }
 
-  useEffect(() => { load(); }, [date]);
+  useEffect(() => { load(); }, [date, season]);
+
+  const seasons = [...new Set(allMatches.map((m) => m.season).filter(Boolean) as string[])].sort();
 
   async function deleteMatch(id: number) {
     if (!confirm("Delete this match and all its stats?")) return;
@@ -65,47 +90,56 @@ export default function MatchesPage() {
       </div>
 
       {/* Header */}
-      <div className="relative pt-10 pb-6">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-          <div className="flex-1">
-            <p className="text-xs uppercase tracking-[0.25em] text-blue-400 font-bold mb-1">History</p>
-            <h1 className="text-[5rem] sm:text-[7rem] leading-none bg-gradient-to-br from-blue-300 via-blue-400 to-cyan-300 bg-clip-text text-transparent"
-              style={{ fontFamily: "var(--font-bebas)", letterSpacing: "0.05em", lineHeight: 1 }}>
-              All<br /><span className="text-white">Matches</span>
+      <div className="relative pt-8 pb-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.3em] text-blue-400/80 font-bold mb-1.5">History</p>
+            <h1 style={{ fontFamily: "var(--font-bebas)", letterSpacing: "0.04em", lineHeight: 1 }}
+              className="text-[2.8rem] sm:text-[3.5rem] leading-none">
+              <span className="bg-gradient-to-br from-blue-300 to-blue-500 bg-clip-text text-transparent">All</span>
+              {" "}<span className="text-white">Matches</span>
             </h1>
-            <p className="text-gray-500 mt-2 text-sm" style={{ fontFamily: "var(--font-rajdhani)", fontWeight: 600 }}>
-              All recorded matches
-            </p>
+            {!loading && matches.length > 0 && (
+              <p className="text-xs text-gray-600 mt-1 font-medium">{matches.length} match{matches.length !== 1 ? "es" : ""}{season ? ` · Season ${season}` : ""}</p>
+            )}
           </div>
-          <div className="w-36 h-40 sm:w-44 sm:h-48 shrink-0 self-center opacity-40">
-            <StumpsHit className="w-full h-full" />
+          <div className="flex flex-col gap-2 pt-1 items-end shrink-0">
+            {seasons.length > 0 && (
+              <div className="flex items-center gap-1 flex-wrap justify-end">
+                <button onClick={() => setSeason("")}
+                  className={`px-2 py-1 rounded-md text-xs font-semibold border transition-colors ${season === "" ? "bg-white/15 text-white border-white/25" : "bg-white/5 text-gray-500 border-white/8 hover:text-white"}`}>
+                  All
+                </button>
+                {seasons.map((s) => (
+                  <button key={s} onClick={() => setSeason(season === s ? "" : s)}
+                    className={`px-2 py-1 rounded-md text-xs font-semibold border transition-colors ${season === s ? "bg-indigo-500/25 text-indigo-200 border-indigo-500/35" : "bg-white/5 text-gray-500 border-white/8 hover:text-white"}`}>
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5">
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+                className="bg-transparent text-xs text-white focus:outline-none w-28" />
+              {date && <button onClick={() => setDate("")} className="text-gray-600 hover:text-gray-400 text-xs">✕</button>}
+            </div>
+            {isAdmin && (
+              <Link href="/matches/new"
+                className="px-3 py-1.5 bg-orange-500 hover:bg-orange-400 text-white text-xs font-bold rounded-lg transition-all">
+                + Add Match
+              </Link>
+            )}
           </div>
-        </div>
-        <div className="mt-4 mb-2 h-px bg-gradient-to-r from-blue-500/50 via-blue-500/20 to-transparent" />
-        <div className="mt-4 flex items-center gap-3 flex-wrap justify-end">
-          <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
-            <span className="text-gray-500 text-xs">📅</span>
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-              className="bg-transparent text-sm text-white focus:outline-none w-32" />
-            {date && <button onClick={() => setDate("")} className="text-gray-600 hover:text-gray-400 text-xs ml-1">✕</button>}
-          </div>
-          {isAdmin && (
-            <Link href="/matches/new"
-              className="px-4 py-2.5 bg-orange-500 hover:bg-orange-400 text-white text-sm font-bold rounded-xl transition-all shadow-[0_0_20px_rgba(249,115,22,0.3)] hover:shadow-[0_0_28px_rgba(249,115,22,0.5)]">
-              + Add Match
-            </Link>
-          )}
         </div>
       </div>
 
       {loading ? (
-        <div className="text-center py-20 text-gray-600">
-          <div className="text-4xl mb-3 animate-pulse">📋</div>
-          <p>Loading matches…</p>
+        <div className="text-center py-16 text-gray-600">
+          <div className="w-6 h-6 border-2 border-blue-500/30 border-t-blue-400 rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-sm">Loading…</p>
         </div>
       ) : loadError ? (
-        <div className="text-center py-20 text-gray-600 border border-red-500/10 rounded-2xl bg-red-500/[0.03]">
-          <div className="text-4xl mb-3">⚠️</div>
+        <div className="text-center py-16 text-gray-600 border border-red-500/10 rounded-2xl bg-red-500/[0.03]">
           <p className="font-semibold text-red-400">Failed to load matches.</p>
           <button onClick={load} className="mt-3 text-xs text-gray-500 hover:text-gray-300 underline">Try again</button>
         </div>
@@ -149,11 +183,18 @@ export default function MatchesPage() {
                       <span className="text-gray-700">·</span>
                       <span className="text-xs text-gray-600">{inningsNums.length} inn</span>
                     </div>
-                    {m.result && (
-                      <div className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-green-500/10 border border-green-500/25 text-green-400 text-xs font-semibold">
-                        🏆 {m.result}
-                      </div>
-                    )}
+                    <div className="flex flex-wrap gap-2 mt-1.5">
+                      {m.result && (
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-green-500/10 border border-green-500/25 text-green-400 text-xs font-semibold">
+                          🏆 {m.result}
+                        </div>
+                      )}
+                      {m.potm && (
+                        <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-yellow-500/10 border border-yellow-500/25 text-yellow-300 text-xs font-semibold">
+                          ⭐ {m.potm.name}
+                        </div>
+                      )}
+                    </div>
                   </div>
 
                   {/* Actions */}
@@ -162,6 +203,10 @@ export default function MatchesPage() {
                       className="px-3 py-1.5 bg-white/8 hover:bg-white/15 text-xs text-gray-300 rounded-lg transition-colors font-medium">
                       {isOpen ? "Hide" : "View"}
                     </button>
+                    <Link href={`/share/${m.id}`} target="_blank"
+                      className="px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 text-xs text-green-400 rounded-lg transition-colors font-medium border border-green-500/15">
+                      Share
+                    </Link>
                     {isAdmin && (
                       <>
                         <button onClick={() => router.push(`/matches/${m.id}`)}
@@ -212,24 +257,34 @@ export default function MatchesPage() {
                                     <th className="text-center px-2 py-1.5">B</th>
                                     <th className="text-center px-2 py-1.5">4s</th>
                                     <th className="text-center px-2 py-1.5">6s</th>
-                                    <th className="text-center px-2 py-1.5">NO</th>
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {battingStats.filter(b => !b.dnb).map(b => (
-                                    <tr key={b.player.id} className="border-t border-white/5">
-                                      <td className="px-3 py-1.5 text-white font-medium">{b.player.name}</td>
-                                      <td className="px-2 py-1.5 text-center font-bold text-orange-300">{b.runs}</td>
-                                      <td className="px-2 py-1.5 text-center text-gray-500">{b.balls}</td>
-                                      <td className="px-2 py-1.5 text-center text-gray-500">{b.fours}</td>
-                                      <td className="px-2 py-1.5 text-center text-gray-500">{b.sixes}</td>
-                                      <td className="px-2 py-1.5 text-center text-gray-500">{b.notOut ? "✓" : "—"}</td>
-                                    </tr>
-                                  ))}
+                                  {battingStats.filter(b => !b.dnb).map(b => {
+                                    const dis = formatDismissal(b.dismissal, b.notOut);
+                                    return (
+                                      <tr key={b.player.id} className={`border-t border-white/5 ${m.potm?.id === b.player.id ? "bg-yellow-500/5" : ""}`}>
+                                        <td className="px-3 py-1.5 font-medium">
+                                          <span className={m.potm?.id === b.player.id ? "text-yellow-300" : "text-white"}>
+                                            {m.potm?.id === b.player.id && "⭐ "}{b.player.name}
+                                          </span>
+                                          {dis && (
+                                            <span className={`text-[10px] font-semibold ml-2 ${b.notOut ? "text-green-400" : "text-red-400"}`}>
+                                              {dis}
+                                            </span>
+                                          )}
+                                        </td>
+                                        <td className="px-2 py-1.5 text-center font-bold text-orange-300">{b.runs}{b.notOut ? "*" : ""}</td>
+                                        <td className="px-2 py-1.5 text-center text-gray-500">{b.balls}</td>
+                                        <td className="px-2 py-1.5 text-center text-gray-500">{b.fours}</td>
+                                        <td className="px-2 py-1.5 text-center text-gray-500">{b.sixes}</td>
+                                      </tr>
+                                    );
+                                  })}
                                   {battingStats.filter(b => b.dnb).map(b => (
                                     <tr key={b.player.id} className="border-t border-white/5 opacity-30">
                                       <td className="px-3 py-1.5 text-white">{b.player.name}</td>
-                                      <td className="px-2 py-1.5 text-center text-gray-600" colSpan={5}>DNB</td>
+                                      <td className="px-2 py-1.5 text-center text-gray-600" colSpan={4}>DNB</td>
                                     </tr>
                                   ))}
                                 </tbody>

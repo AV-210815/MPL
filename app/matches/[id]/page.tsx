@@ -50,8 +50,8 @@ export default async function EditMatchPage({ params }: Props) {
           batting: batTeamIds.map((pid) => {
             const s = match.batting.find((b) => b.playerId === pid && b.innings === n);
             return s
-              ? { playerId: pid, runs: s.runs, balls: s.balls, fours: s.fours, sixes: s.sixes, notOut: s.notOut, dnb: s.dnb }
-              : { playerId: pid, runs: 0, balls: 0, fours: 0, sixes: 0, notOut: false, dnb: false };
+              ? { playerId: pid, runs: s.runs, balls: s.balls, fours: s.fours, sixes: s.sixes, notOut: s.notOut, dnb: s.dnb, dismissal: (s as any).dismissal ?? "" }
+              : { playerId: pid, runs: 0, balls: 0, fours: 0, sixes: 0, notOut: false, dnb: false, dismissal: "" };
           }),
           bowling: bowlTeamIds.map((pid) => {
             const s = match.bowling.find((b) => b.playerId === pid && b.innings === n);
@@ -68,12 +68,14 @@ export default async function EditMatchPage({ params }: Props) {
       format: (match.format as "TEST" | "ODI" | "T20") ?? "ODI",
       date: match.date.toISOString().split("T")[0],
       label: match.label ?? "",
+      season: (match as any).season ?? "",
       team1Name: match.team1Name ?? "Team 1",
       team2Name: match.team2Name ?? "Team 2",
       battingFirst,
     },
     members: match.members.map((m) => ({ playerId: m.playerId, team: m.team as 1 | 2 })),
     innings,
+    potmId: match.potmId ?? null,
   };
 
   return (

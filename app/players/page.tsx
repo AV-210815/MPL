@@ -113,23 +113,15 @@ export default function PlayersPage() {
       </div>
 
       {/* Header */}
-      <div className="relative pt-10 pb-8">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-          <div className="flex-1">
-            <p className="text-xs uppercase tracking-[0.25em] text-green-400 font-bold mb-1">Squad</p>
-            <h1 className="text-[5rem] sm:text-[7rem] leading-none bg-gradient-to-br from-green-300 via-green-400 to-emerald-300 bg-clip-text text-transparent"
-              style={{ fontFamily: "var(--font-bebas)", letterSpacing: "0.05em", lineHeight: 1 }}>
-              League<br /><span className="text-white">Players</span>
-            </h1>
-            <p className="text-gray-500 mt-2 text-sm" style={{ fontFamily: "var(--font-rajdhani)", fontWeight: 600 }}>
-              Manage league participants
-            </p>
-          </div>
-          <div className="text-[7rem] sm:text-[9rem] leading-none select-none shrink-0 self-center opacity-35">
-            👤
-          </div>
-        </div>
-        <div className="mt-6 h-px bg-gradient-to-r from-green-500/50 via-green-500/20 to-transparent" />
+      <div className="relative pt-8 pb-5">
+        <p className="text-[10px] uppercase tracking-[0.3em] text-green-400/80 font-bold mb-1.5">Squad</p>
+        <h1 style={{ fontFamily: "var(--font-bebas)", letterSpacing: "0.04em", lineHeight: 1 }}
+          className="text-[2.8rem] sm:text-[3.5rem] leading-none">
+          <span className="bg-gradient-to-br from-green-300 to-emerald-400 bg-clip-text text-transparent">League</span>
+          {" "}<span className="text-white">Players</span>
+        </h1>
+        <p className="text-gray-600 mt-1 text-xs">Manage league participants</p>
+        <div className="mt-5 h-px bg-gradient-to-r from-green-500/30 to-transparent" />
       </div>
 
       {/* Hidden file input */}
@@ -162,9 +154,13 @@ export default function PlayersPage() {
 
         {/* Player count */}
         {players.length > 0 && (
-          <p className="text-xs text-gray-600 uppercase tracking-widest font-semibold px-1">
-            {players.length} player{players.length !== 1 ? "s" : ""} in the league
-          </p>
+          <div className="flex items-center gap-3 px-1">
+            <span className="text-2xl font-black text-green-400" style={{ fontFamily: "var(--font-oswald)" }}>{players.length}</span>
+            <span className="text-xs text-gray-600 uppercase tracking-widest font-semibold">
+              player{players.length !== 1 ? "s" : ""} in the squad
+            </span>
+            <div className="flex-1 h-px bg-white/5" />
+          </div>
         )}
 
         {/* Player list */}
@@ -181,7 +177,13 @@ export default function PlayersPage() {
               const isUploading = uploadingId === p.id;
               return (
                 <div key={p.id}
-                  className="flex items-center gap-3 px-4 py-3.5 rounded-2xl border border-white/8 bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/12 transition-all">
+                  className="flex items-center gap-3 px-4 py-3.5 rounded-2xl border border-white/8 bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/12 transition-all group/row">
+
+                  {/* Rank badge */}
+                  <span className="text-[10px] font-black text-gray-700 group-hover/row:text-gray-500 w-5 text-center shrink-0 transition-colors"
+                    style={{ fontFamily: "var(--font-oswald)" }}>
+                    {idx + 1}
+                  </span>
 
                   {/* Avatar with photo upload */}
                   <div className="relative shrink-0 group/avatar">

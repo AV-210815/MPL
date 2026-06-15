@@ -12,6 +12,7 @@ interface MatchDetails {
   format: Format;
   date: string;
   label: string;
+  season: string;
   team1Name: string;
   team2Name: string;
   battingFirst: 1 | 2;
@@ -31,6 +32,7 @@ interface BattingEntry {
   sixes: number;
   notOut: boolean;
   dnb: boolean;
+  dismissal: string; // "b PlayerName", "ro FielderName", or ""
 }
 
 interface BowlingEntry {
@@ -52,12 +54,14 @@ export interface InitialData {
   details: MatchDetails;
   members: { playerId: number; team: 1 | 2 }[];
   innings: InningsData[];
+  potmId?: number | null;
 }
 
 interface Props {
   players: Player[];
   matchId?: number;
   initial?: InitialData;
+  redirectTo?: string;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -75,7 +79,7 @@ function buildInnings(teams: Teams, details: MatchDetails): InningsData[] {
     return {
       inningsNum: n,
       battingTeam: bt,
-      batting: teams[`team${bt}` as "team1" | "team2"].map((pid) => ({ playerId: pid, runs: 0, balls: 0, fours: 0, sixes: 0, notOut: false, dnb: false })),
+      batting: teams[`team${bt}` as "team1" | "team2"].map((pid) => ({ playerId: pid, runs: 0, balls: 0, fours: 0, sixes: 0, notOut: false, dnb: false, dismissal: "" })),
       bowling: teams[`team${bwt}` as "team1" | "team2"].map((pid) => ({ playerId: pid, wickets: 0, overs: 0, runsConceded: 0, maidens: 0 })),
     };
   });
@@ -90,7 +94,7 @@ function addTestInnings(prev: InningsData[], details: MatchDetails, teams: Teams
     {
       inningsNum: n,
       battingTeam: bt,
-      batting: teams[`team${bt}` as "team1" | "team2"].map((pid) => ({ playerId: pid, runs: 0, balls: 0, fours: 0, sixes: 0, notOut: false, dnb: false })),
+      batting: teams[`team${bt}` as "team1" | "team2"].map((pid) => ({ playerId: pid, runs: 0, balls: 0, fours: 0, sixes: 0, notOut: false, dnb: false, dismissal: "" })),
       bowling: teams[`team${bwt}` as "team1" | "team2"].map((pid) => ({ playerId: pid, wickets: 0, overs: 0, runsConceded: 0, maidens: 0 })),
     },
   ];
@@ -140,6 +144,10 @@ function Step1({ details, onChange }: { details: MatchDetails; onChange: (d: Mat
           <div>
             <label className="text-xs text-gray-400 mb-1 block">Label (optional)</label>
             <input type="text" value={details.label} onChange={(e) => set("label", e.target.value)} placeholder="e.g. Match 1" className={inp} />
+          </div>
+          <div>
+            <label className="text-xs text-gray-400 mb-1 block">Season (optional)</label>
+            <input type="text" value={details.season} onChange={(e) => set("season", e.target.value)} placeholder="e.g. 2025, Season 1" className={inp} />
           </div>
         </div>
       </div>
@@ -309,13 +317,85 @@ function Step2({ teams, setTeams, details, players }: { teams: Teams; setTeams: 
 
 // ─── Step 3: Scorecards ───────────────────────────────────────────────────────
 
-function BattingTable({ rows, players, onChange }: {
+type DismissalType = "" | "b" | "c" | "c&b" | "lbw" | "ro" | "st" | "hw" | "obs" | "hb" | "ret";
+
+function parseDismissal(d: string): { type: DismissalType; name1: string; name2: string } {
+  if (!d) return { type: "", name1: "", name2: "" };
+  if (d === "obs") return { type: "obs", name1: "", name2: "" };
+  if (d === "hb") return { type: "hb", name1: "", name2: "" };
+  if (d === "ret out" || d === "ret") return { type: "ret", name1: "", name2: "" };
+  if (d.startsWith("c&b")) return { type: "c&b", name1: d.slice(3).trim(), name2: "" };
+  const cFull = d.match(/^c (.+) b (.+)$/);
+  if (cFull) return { type: "c", name1: cFull[1], name2: cFull[2] };
+  if (d.startsWith("c ") || d === "c") return { type: "c", name1: d.slice(1).trim(), name2: "" };
+  const stFull = d.match(/^st (.+) b (.+)$/);
+  if (stFull) return { type: "st", name1: stFull[1], name2: stFull[2] };
+  if (d.startsWith("st")) return { type: "st", name1: d.slice(2).trim(), name2: "" };
+  if (d.startsWith("lbw")) return { type: "lbw", name1: d.slice(3).trim(), name2: "" };
+  if (d.startsWith("hw")) return { type: "hw", name1: d.slice(2).trim(), name2: "" };
+  if (d.startsWith("ro")) return { type: "ro", name1: d.slice(2).trim(), name2: "" };
+  if (d.startsWith("b")) return { type: "b", name1: d.slice(1).trim(), name2: "" };
+  return { type: "", name1: "", name2: "" };
+}
+
+// Always write the type prefix so parseDismissal can recover type even with empty names
+function composeDismissal(type: DismissalType, name1: string, name2: string): string {
+  if (!type) return "";
+  if (type === "obs") return "obs";
+  if (type === "hb") return "hb";
+  if (type === "ret") return "ret out";
+  if (type === "b") return name1 ? `b ${name1}` : "b";
+  if (type === "c&b") return name1 ? `c&b ${name1}` : "c&b";
+  if (type === "lbw") return name1 ? `lbw ${name1}` : "lbw";
+  if (type === "hw") return name1 ? `hw ${name1}` : "hw";
+  if (type === "ro") return name1 ? `ro ${name1}` : "ro";
+  if (type === "c") return name1 && name2 ? `c ${name1} b ${name2}` : name1 ? `c ${name1}` : "c";
+  if (type === "st") return name1 && name2 ? `st ${name1} b ${name2}` : name1 ? `st ${name1}` : "st";
+  return "";
+}
+
+const BOWLER_TYPES: DismissalType[] = ["b", "c&b", "lbw", "hw"];
+const BOWLER_FIELDER_TYPES: DismissalType[] = ["c", "st"];
+const FIELDER_ONLY_TYPES: DismissalType[] = ["ro"];
+const NO_NAME_TYPES: DismissalType[] = ["obs", "hb", "ret"];
+
+function BowlerSelect({ value, players, onChange }: { value: string; players: Player[]; onChange: (v: string) => void }) {
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)}
+      className="bg-white/5 border border-white/10 rounded px-1.5 py-1 text-xs text-gray-300 focus:outline-none focus:border-orange-500/50">
+      <option value="">— bowler —</option>
+      {players.map((p) => <option key={p.id} value={p.name}>{p.name}</option>)}
+    </select>
+  );
+}
+
+function NameInput({ value, placeholder, onChange }: { value: string; placeholder: string; onChange: (v: string) => void }) {
+  return (
+    <input type="text" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+      className="bg-white/5 border border-white/10 rounded px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-orange-500/50 w-28" />
+  );
+}
+
+function BattingTable({ rows, players, bowlingTeamPlayers, onChange }: {
   rows: BattingEntry[];
   players: Player[];
+  bowlingTeamPlayers: Player[];
   onChange: (rows: BattingEntry[]) => void;
 }) {
-  function upd(idx: number, field: keyof BattingEntry, val: number | boolean) {
+  function upd(idx: number, field: keyof BattingEntry, val: number | boolean | string) {
     onChange(rows.map((r, i) => i === idx ? { ...r, [field]: val } : r));
+  }
+
+  function setType(idx: number, type: DismissalType, cur: { name1: string; name2: string }) {
+    upd(idx, "dismissal", composeDismissal(type, cur.name1, cur.name2));
+  }
+
+  function setName1(idx: number, type: DismissalType, name1: string, name2: string) {
+    upd(idx, "dismissal", composeDismissal(type, name1, name2));
+  }
+
+  function setName2(idx: number, type: DismissalType, name1: string, name2: string) {
+    upd(idx, "dismissal", composeDismissal(type, name1, name2));
   }
 
   return (
@@ -330,21 +410,101 @@ function BattingTable({ rows, players, onChange }: {
             <th className="text-center pb-2 px-1">6s</th>
             <th className="text-center pb-2 px-1">NO</th>
             <th className="text-center pb-2 px-1">DNB</th>
+            <th className="text-left pb-2 pl-3 text-gray-500">Dismissal</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row, idx) => {
             const p = players.find((x) => x.id === row.playerId);
-            const disabled = row.dnb;
+            const disabled = row.dnb || row.notOut;
+            const { type, name1, name2 } = parseDismissal(row.dismissal);
             return (
-              <tr key={row.playerId} className={disabled ? "opacity-40" : ""}>
+              <tr key={row.playerId} className={row.dnb ? "opacity-40" : ""}>
                 <td className="pr-3 py-1 text-white font-medium whitespace-nowrap">{p?.name}</td>
-                <td className="px-1 py-1"><input disabled={disabled} type="number" min="0" value={row.runs} onChange={(e) => upd(idx, "runs", Number(e.target.value))} className={numInp + " w-14"} /></td>
-                <td className="px-1 py-1"><input disabled={disabled} type="number" min="0" value={row.balls} onChange={(e) => upd(idx, "balls", Number(e.target.value))} className={numInp + " w-14"} /></td>
-                <td className="px-1 py-1"><input disabled={disabled} type="number" min="0" value={row.fours} onChange={(e) => upd(idx, "fours", Number(e.target.value))} className={numInp + " w-14"} /></td>
-                <td className="px-1 py-1"><input disabled={disabled} type="number" min="0" value={row.sixes} onChange={(e) => upd(idx, "sixes", Number(e.target.value))} className={numInp + " w-14"} /></td>
-                <td className="px-1 py-1 text-center"><input disabled={disabled} type="checkbox" checked={row.notOut} onChange={(e) => upd(idx, "notOut", e.target.checked)} className="accent-orange-500 w-4 h-4" /></td>
-                <td className="px-1 py-1 text-center"><input type="checkbox" checked={row.dnb} onChange={(e) => { upd(idx, "dnb", e.target.checked); if (e.target.checked) { upd(idx, "runs", 0); upd(idx, "balls", 0); } }} className="accent-gray-500 w-4 h-4" /></td>
+                <td className="px-1 py-1"><input disabled={row.dnb} type="number" min="0" value={row.runs} onChange={(e) => upd(idx, "runs", Number(e.target.value))} className={numInp + " w-14"} /></td>
+                <td className="px-1 py-1"><input disabled={row.dnb} type="number" min="0" value={row.balls} onChange={(e) => upd(idx, "balls", Number(e.target.value))} className={numInp + " w-14"} /></td>
+                <td className="px-1 py-1"><input disabled={row.dnb} type="number" min="0" value={row.fours} onChange={(e) => upd(idx, "fours", Number(e.target.value))} className={numInp + " w-14"} /></td>
+                <td className="px-1 py-1"><input disabled={row.dnb} type="number" min="0" value={row.sixes} onChange={(e) => upd(idx, "sixes", Number(e.target.value))} className={numInp + " w-14"} /></td>
+                <td className="px-1 py-1 text-center">
+                  <input
+                    disabled={row.dnb}
+                    type="checkbox"
+                    checked={row.notOut}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      onChange(rows.map((r, i) => i === idx ? { ...r, notOut: checked, ...(checked ? { dismissal: "" } : {}) } : r));
+                    }}
+                    className="accent-orange-500 w-4 h-4"
+                  />
+                </td>
+                <td className="px-1 py-1 text-center">
+                  <input
+                    type="checkbox"
+                    checked={row.dnb}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      onChange(rows.map((r, i) => i === idx ? { ...r, dnb: checked, ...(checked ? { runs: 0, balls: 0, dismissal: "" } : {}) } : r));
+                    }}
+                    className="accent-gray-500 w-4 h-4"
+                  />
+                </td>
+                <td className="pl-3 py-1">
+                  {disabled ? (
+                    <span className="text-xs text-gray-600 italic">{row.notOut ? "not out" : "—"}</span>
+                  ) : (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <select
+                        value={type}
+                        onChange={(e) => setType(idx, e.target.value as DismissalType, { name1: "", name2: "" })}
+                        className="bg-white/5 border border-white/10 rounded px-1.5 py-1 text-xs text-gray-300 focus:outline-none focus:border-orange-500/50"
+                      >
+                        <option value="">—</option>
+                        <option value="b">Bowled</option>
+                        <option value="c">Caught</option>
+                        <option value="c&b">Caught &amp; Bowled</option>
+                        <option value="lbw">LBW</option>
+                        <option value="ro">Run Out</option>
+                        <option value="st">Stumped</option>
+                        <option value="hw">Hit Wicket</option>
+                        <option value="obs">Obstructing</option>
+                        <option value="hb">Handled Ball</option>
+                        <option value="ret">Retired Out</option>
+                      </select>
+
+                      {/* Bowled / LBW / Hit Wicket / C&B: just bowler */}
+                      {BOWLER_TYPES.includes(type) && (
+                        <BowlerSelect value={name1} players={bowlingTeamPlayers}
+                          onChange={(v) => setName1(idx, type, v, name2)} />
+                      )}
+
+                      {/* Caught: fielder text + bowler dropdown */}
+                      {type === "c" && (
+                        <>
+                          <NameInput value={name1} placeholder="fielder" onChange={(v) => setName1(idx, "c", v, name2)} />
+                          <span className="text-xs text-gray-600">b</span>
+                          <BowlerSelect value={name2} players={bowlingTeamPlayers}
+                            onChange={(v) => setName2(idx, "c", name1, v)} />
+                        </>
+                      )}
+
+                      {/* Stumped: keeper text + bowler dropdown */}
+                      {type === "st" && (
+                        <>
+                          <NameInput value={name1} placeholder="keeper" onChange={(v) => setName1(idx, "st", v, name2)} />
+                          <span className="text-xs text-gray-600">b</span>
+                          <BowlerSelect value={name2} players={bowlingTeamPlayers}
+                            onChange={(v) => setName2(idx, "st", name1, v)} />
+                        </>
+                      )}
+
+                      {/* Run Out: just fielder */}
+                      {FIELDER_ONLY_TYPES.includes(type) && (
+                        <NameInput value={name1} placeholder="fielder" onChange={(v) => setName1(idx, type, v, name2)} />
+                      )}
+                      {/* obs / hb / ret: no extra fields */}
+                    </div>
+                  )}
+                </td>
               </tr>
             );
           })}
@@ -463,6 +623,7 @@ function Step3({ innings, setInnings, details, teams, players }: {
               <BattingTable
                 rows={inn.batting}
                 players={players}
+                bowlingTeamPlayers={players.filter((pl) => inn.bowling.some((b) => b.playerId === pl.id))}
                 onChange={(rows) => updateInnings(idx, { ...inn, batting: rows })}
               />
             </div>
@@ -478,6 +639,51 @@ function Step3({ innings, setInnings, details, teams, players }: {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ─── POTM Picker ──────────────────────────────────────────────────────────────
+
+function PotmPicker({ players, matchPlayers, potmId, onChange }: {
+  players: Player[];
+  matchPlayers: number[];
+  potmId: number | null;
+  onChange: (id: number | null) => void;
+}) {
+  const eligible = players.filter((p) => matchPlayers.includes(p.id));
+  return (
+    <div className="mt-6 bg-yellow-500/5 border border-yellow-500/20 rounded-xl p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-xl">⭐</span>
+        <h3 className="font-bold text-white" style={{ fontFamily: "var(--font-rajdhani)" }}>Player of the Match</h3>
+        <span className="text-xs text-gray-600 ml-1">(optional)</span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {eligible.map((p) => {
+          const selected = potmId === p.id;
+          return (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => onChange(selected ? null : p.id)}
+              className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all border ${
+                selected
+                  ? "bg-yellow-500 border-yellow-400 text-black shadow-[0_0_16px_rgba(234,179,8,0.4)]"
+                  : "bg-white/5 border-white/10 text-gray-300 hover:border-yellow-500/40 hover:text-yellow-200"
+              }`}
+            >
+              {selected && "⭐ "}{p.name}
+            </button>
+          );
+        })}
+        {potmId && (
+          <button type="button" onClick={() => onChange(null)}
+            className="px-3 py-2 rounded-xl text-xs text-gray-600 hover:text-gray-400 border border-dashed border-white/10 transition-colors">
+            Clear
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -503,7 +709,7 @@ function StepBar({ step }: { step: number }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function MatchForm({ players, matchId, initial }: Props) {
+export default function MatchForm({ players, matchId, initial, redirectTo = "/matches" }: Props) {
   const router = useRouter();
   const today = new Date().toISOString().split("T")[0];
 
@@ -512,7 +718,7 @@ export default function MatchForm({ players, matchId, initial }: Props) {
   const [error, setError] = useState("");
 
   const [details, setDetails] = useState<MatchDetails>(
-    initial?.details ?? { format: "ODI", date: today, label: "", team1Name: "", team2Name: "", battingFirst: 1 }
+    initial?.details ?? { format: "ODI", date: today, label: "", season: "", team1Name: "", team2Name: "", battingFirst: 1 }
   );
 
   const [teams, setTeams] = useState<Teams>(() => {
@@ -526,6 +732,7 @@ export default function MatchForm({ players, matchId, initial }: Props) {
   });
 
   const [innings, setInnings] = useState<InningsData[]>(initial?.innings ?? []);
+  const [potmId, setPotmId] = useState<number | null>(initial?.potmId ?? null);
 
   function goToStep3() {
     if (teams.team1.length === 0 || teams.team2.length === 0) return;
@@ -555,14 +762,14 @@ export default function MatchForm({ players, matchId, initial }: Props) {
       const res = await fetch(matchId ? `/api/matches/${matchId}` : "/api/matches", {
         method: matchId ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...details, members, batting, bowling }),
+        body: JSON.stringify({ ...details, potmId, members, batting, bowling }),
       });
       if (!res.ok) {
         let msg = "Failed to save";
         try { msg = (await res.json()).error ?? msg; } catch { /* empty body */ }
         throw new Error(msg);
       }
-      router.push("/matches");
+      router.push(redirectTo);
       router.refresh();
     } catch (err) {
       setError(String(err));
@@ -577,7 +784,17 @@ export default function MatchForm({ players, matchId, initial }: Props) {
 
       {step === 1 && <Step1 details={details} onChange={setDetails} />}
       {step === 2 && <Step2 teams={teams} setTeams={setTeams} details={details} players={players} />}
-      {step === 3 && <Step3 innings={innings} setInnings={setInnings} details={details} teams={teams} players={players} />}
+      {step === 3 && (
+        <>
+          <Step3 innings={innings} setInnings={setInnings} details={details} teams={teams} players={players} />
+          <PotmPicker
+            players={players}
+            matchPlayers={[...teams.team1, ...teams.team2]}
+            potmId={potmId}
+            onChange={setPotmId}
+          />
+        </>
+      )}
 
       {error && <p className="text-red-400 text-sm mt-4">{error}</p>}
 

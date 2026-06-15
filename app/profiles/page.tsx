@@ -5,14 +5,19 @@ import Image from "next/image";
 interface BattingProfile {
   innings: number; runs: number; avg: number | null; sr: number;
   hundreds: number; fifties: number; fours: number; sixes: number;
+  bestScore: { runs: number; notOut: boolean } | null;
 }
 interface BowlingProfile {
   wickets: number; maidens: number; overs: number;
   runsConceded: number; economy: number; avg: number | null;
+  bestFigures: { wickets: number; runsConceded: number } | null;
 }
+interface Badge { icon: string; label: string; desc: string }
 interface Profile {
   id: number; name: string; photo?: string | null; matches: number;
   batting: BattingProfile; bowling: BowlingProfile;
+  recentForm: { runs: number; notOut: boolean }[];
+  badges: Badge[];
 }
 
 function fmtAvg(v: number | null) {
@@ -30,6 +35,32 @@ const cardThemes = [
   { banner: "from-pink-600 via-rose-600 to-red-700",      glow: "rgba(236,72,153,0.35)",  ring: "ring-pink-500/40",   accent: "text-pink-300",    border: "border-pink-500/25"   },
   { banner: "from-amber-500 via-yellow-500 to-orange-600", glow: "rgba(245,158,11,0.35)", ring: "ring-amber-500/40",  accent: "text-amber-300",   border: "border-amber-500/25"  },
 ];
+
+function formColor(runs: number) {
+  if (runs >= 40) return "bg-green-500 text-white";
+  if (runs >= 25) return "bg-green-400/80 text-white";
+  if (runs >= 10) return "bg-yellow-400 text-black";
+  if (runs > 0)   return "bg-orange-500 text-white";
+  return "bg-red-600 text-white";
+}
+
+function FormDots({ form }: { form: { runs: number; notOut: boolean }[] }) {
+  if (form.length === 0) return null;
+  return (
+    <div className="flex items-center gap-1.5 mb-3">
+      <span className="text-[9px] uppercase tracking-widest text-gray-600 font-bold mr-0.5">Form</span>
+      {form.map((f, i) => (
+        <div key={i} title={`${f.runs}${f.notOut ? "*" : ""}`}
+          className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-black ${formColor(f.runs)}`}>
+          {f.runs}{f.notOut ? "*" : ""}
+        </div>
+      ))}
+      {Array.from({ length: Math.max(0, 5 - form.length) }).map((_, i) => (
+        <div key={`e${i}`} className="w-7 h-7 rounded-full bg-white/5 border border-white/10" />
+      ))}
+    </div>
+  );
+}
 
 function StatBox({ label, value, highlight = false }: { label: string; value: string; highlight?: boolean }) {
   return (
@@ -69,40 +100,34 @@ export default function ProfilesPage() {
         <div className="absolute -top-20 -left-20 w-[400px] h-[400px] rounded-full bg-indigo-600/10 blur-[120px]" />
         <div className="absolute top-60 -right-10 w-[300px] h-[300px] rounded-full bg-blue-600/8 blur-[90px]" />
         <div className="absolute bottom-20 left-1/3 w-[250px] h-[250px] rounded-full bg-purple-600/8 blur-[80px]" />
+        <div className="absolute inset-0 opacity-[0.018]"
+          style={{ backgroundImage: "linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px)", backgroundSize: "40px 40px" }} />
       </div>
 
       {/* Header */}
-      <div className="relative pt-10 pb-8">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-          <div className="flex-1">
-            <p className="text-xs uppercase tracking-[0.25em] text-indigo-400 font-bold mb-1">Career Stats</p>
-            <h1 className="text-[5rem] sm:text-[7rem] leading-none bg-gradient-to-br from-indigo-300 via-blue-400 to-cyan-300 bg-clip-text text-transparent"
-              style={{ fontFamily: "var(--font-bebas)", letterSpacing: "0.05em", lineHeight: 1 }}>
-              Player<br /><span className="text-white">Profiles</span>
-            </h1>
-            <p className="text-gray-500 mt-2 text-sm" style={{ fontFamily: "var(--font-rajdhani)", fontWeight: 600 }}>
-              Career milestones from all matches
-            </p>
-          </div>
-          <div className="text-[7rem] sm:text-[9rem] leading-none select-none shrink-0 self-center opacity-35">📊</div>
-        </div>
-        <div className="mt-6 h-px bg-gradient-to-r from-indigo-500/50 via-indigo-500/20 to-transparent" />
+      <div className="relative pt-8 pb-5">
+        <p className="text-[10px] uppercase tracking-[0.3em] text-indigo-400/80 font-bold mb-1.5">Career Stats</p>
+        <h1 style={{ fontFamily: "var(--font-bebas)", letterSpacing: "0.04em", lineHeight: 1 }}
+          className="text-[2.8rem] sm:text-[3.5rem] leading-none">
+          <span className="bg-gradient-to-br from-indigo-300 to-blue-400 bg-clip-text text-transparent">Player</span>
+          {" "}<span className="text-white">Profiles</span>
+        </h1>
+        <p className="text-gray-600 mt-1 text-xs">Career milestones from all matches</p>
+        <div className="mt-5 h-px bg-gradient-to-r from-indigo-500/30 to-transparent" />
       </div>
 
       {loading ? (
-        <div className="text-center py-20 text-gray-600">
-          <div className="text-4xl mb-3 animate-pulse">📊</div>
-          <p>Loading profiles…</p>
+        <div className="text-center py-16 text-gray-600">
+          <div className="w-6 h-6 border-2 border-indigo-500/30 border-t-indigo-400 rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-sm">Loading…</p>
         </div>
       ) : loadError ? (
-        <div className="text-center py-20 text-gray-600 border border-red-500/10 rounded-2xl bg-red-500/[0.03]">
-          <div className="text-4xl mb-3">⚠️</div>
+        <div className="text-center py-16 text-gray-600 border border-red-500/10 rounded-2xl bg-red-500/[0.03]">
           <p className="font-semibold text-red-400">Failed to load profiles.</p>
           <button onClick={load} className="mt-3 text-xs text-gray-500 hover:text-gray-300 underline">Try again</button>
         </div>
       ) : profiles.length === 0 ? (
-        <div className="text-center py-20 text-gray-600 border border-white/5 rounded-2xl bg-white/[0.02]">
-          <div className="text-4xl mb-3">📭</div>
+        <div className="text-center py-16 text-gray-600 border border-white/5 rounded-2xl bg-white/[0.02]">
           <p className="font-semibold">No players yet.</p>
         </div>
       ) : (
@@ -179,7 +204,32 @@ export default function ProfilesPage() {
                         {p.batting.sixes} × 6️⃣
                       </span>
                     )}
+                    {p.batting.bestScore && (
+                      <span className="px-2.5 py-1 rounded-full bg-orange-500/15 border border-orange-500/25 text-orange-300 text-[10px] font-bold tracking-wider">
+                        HS {p.batting.bestScore.runs}{p.batting.bestScore.notOut ? "*" : ""}
+                      </span>
+                    )}
+                    {p.bowling.bestFigures && (
+                      <span className="px-2.5 py-1 rounded-full bg-purple-500/15 border border-purple-500/25 text-purple-300 text-[10px] font-bold tracking-wider">
+                        BB {p.bowling.bestFigures.wickets}/{p.bowling.bestFigures.runsConceded}
+                      </span>
+                    )}
                   </div>
+
+                  {/* Form tracker */}
+                  <FormDots form={p.recentForm} />
+
+                  {/* Achievement badges */}
+                  {p.badges.length > 0 && (
+                    <div className="flex gap-1.5 flex-wrap mb-3">
+                      {p.badges.map((b) => (
+                        <span key={b.label} title={b.desc}
+                          className="px-2 py-0.5 rounded-full bg-white/8 border border-white/15 text-white text-[10px] font-semibold cursor-default">
+                          {b.icon} {b.label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Expand button */}
                   <button onClick={() => setExpanded(isOpen ? null : p.id)}
@@ -207,6 +257,11 @@ export default function ProfilesPage() {
                         <StatBox label="50s" value={String(p.batting.fifties)} highlight />
                         <StatBox label="4s" value={String(p.batting.fours)} />
                         <StatBox label="6s" value={String(p.batting.sixes)} />
+                        {p.batting.bestScore && (
+                          <div className="col-span-4">
+                            <StatBox label="Best Score (HS)" value={`${p.batting.bestScore.runs}${p.batting.bestScore.notOut ? "*" : ""}`} highlight />
+                          </div>
+                        )}
                       </div>
                     </div>
                     {/* Bowling */}
@@ -222,6 +277,11 @@ export default function ProfilesPage() {
                         <StatBox label="Runs" value={String(p.bowling.runsConceded)} />
                         <StatBox label="Econ" value={p.bowling.overs > 0 ? fmt(p.bowling.economy) : "-"} />
                         <StatBox label="Avg" value={fmtAvg(p.bowling.avg)} />
+                        {p.bowling.bestFigures && (
+                          <div className="col-span-3">
+                            <StatBox label="Best Figures (BB)" value={`${p.bowling.bestFigures.wickets}/${p.bowling.bestFigures.runsConceded}`} highlight />
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>

@@ -8,7 +8,7 @@ async function requireAdmin(req: NextRequest) {
   if (!token) return null;
   try {
     const payload = await verifyToken(token);
-    return payload.role === "admin" ? payload : null;
+    return (payload.role === "admin" || payload.role === "superadmin") ? payload : null;
   } catch { return null; }
 }
 
@@ -19,6 +19,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const userId = Number(id);
   if (userId === admin.userId) return NextResponse.json({ error: "Cannot modify your own account" }, { status: 400 });
+
+  const target = await prisma.user.findUnique({ where: { id: userId } });
+  if (!target || target.apartmentId !== admin.apartmentId) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
   const { status, role, permissions, newPassword } = await req.json();
   const data: Record<string, string> = {};
@@ -41,6 +44,9 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const { id } = await params;
   const userId = Number(id);
   if (userId === admin.userId) return NextResponse.json({ error: "Cannot delete your own account" }, { status: 400 });
+
+  const target = await prisma.user.findUnique({ where: { id: userId } });
+  if (!target || target.apartmentId !== admin.apartmentId) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
   await prisma.user.delete({ where: { id: userId } });
   return NextResponse.json({ ok: true });

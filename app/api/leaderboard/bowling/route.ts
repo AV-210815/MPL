@@ -2,9 +2,20 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import type { BowlingStat } from "@/app/generated/prisma/client";
 
+async function getApartmentId(req: NextRequest): Promise<number> {
+  const slug = req.nextUrl.searchParams.get("slug");
+  if (slug) {
+    const apt = await prisma.apartment.findUnique({ where: { slug } });
+    if (apt) return apt.id;
+  }
+  return 1;
+}
+
 export async function GET(req: NextRequest) {
+  const apartmentId = await getApartmentId(req);
   const format = req.nextUrl.searchParams.get("format") || undefined;
   const players = await prisma.player.findMany({
+    where: { apartmentId },
     include: { bowling: { where: format ? { match: { format } } : undefined } },
   });
 

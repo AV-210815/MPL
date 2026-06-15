@@ -8,12 +8,40 @@ const secret = new TextEncoder().encode(process.env.JWT_SECRET ?? "mpl-super-sec
 const PUBLIC = [
   "/", "/login", "/signup", "/unauthorized",
   "/api/auth/login", "/api/auth/signup",
-  "/stats", "/bowling", "/mvp", "/explosive", "/profiles",
+  "/stats", "/bowling", "/mvp", "/explosive", "/profiles", "/compare",
+  "/rivals", "/milestones", "/standings", "/share",
   "/api/mvp", "/api/leaderboard", "/api/profiles",
+  "/api/apartments",
+  "/apartments",
 ];
 
 // Auth required but no permission check (accessible to all logged-in users)
 const ALWAYS_ALLOWED = ["/api/auth/me", "/api/auth/logout"];
+
+// Segments that are top-level MPL pages — anything else is treated as a [slug] route
+const RESERVED_SEGMENTS = new Set([
+  "api", "login", "signup", "stats", "bowling", "mvp", "explosive",
+  "profiles", "matches", "players", "admin", "superadmin", "compare", "unauthorized", "apartments",
+  "rivals", "milestones", "standings", "share",
+  "_next", "favicon.ico",
+]);
+
+// Slug sub-paths that are publicly accessible (no auth required)
+const SLUG_PUBLIC_SUFFIXES = [
+  "/stats", "/bowling", "/mvp", "/explosive", "/profiles",
+  "/login", "/signup", "/unauthorized",
+];
+
+function isSlugRoute(pathname: string): boolean {
+  const seg = pathname.split("/")[1] ?? "";
+  return seg.length > 0 && !RESERVED_SEGMENTS.has(seg);
+}
+
+function isSlugPublic(pathname: string): boolean {
+  const parts = pathname.split("/");
+  const suffix = "/" + parts.slice(2).join("/");
+  return suffix === "/" || suffix === "" || SLUG_PUBLIC_SUFFIXES.some((p) => suffix === p || suffix.startsWith(p + "/"));
+}
 
 function hasPermission(permissions: string[], pathname: string): boolean {
   if (permissions.includes("*")) return true;
@@ -22,6 +50,17 @@ function hasPermission(permissions: string[], pathname: string): boolean {
 
 export async function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // Slug routes: public sub-paths need no auth; protected sub-paths need JWT scoped to that slug
+  if (isSlugRoute(pathname)) {
+    if (isSlugPublic(pathname)) return NextResponse.next();
+    // Protected slug page: require any valid token (the page itself checks slug match)
+    const token = req.cookies.get("mpl-token")?.value;
+    if (!token) return NextResponse.redirect(new URL(`/${pathname.split("/")[1]}/login`, req.url));
+    try { await jwtVerify(token, secret); return NextResponse.next(); }
+    catch { return NextResponse.redirect(new URL(`/${pathname.split("/")[1]}/login`, req.url)); }
+  }
+
   if (PUBLIC.some((p) => pathname.startsWith(p))) return NextResponse.next();
   if (ALWAYS_ALLOWED.some((p) => pathname === p || pathname.startsWith(p + "/"))) {
     const token = req.cookies.get("mpl-token")?.value;
@@ -56,11 +95,10 @@ export async function proxy(req: NextRequest) {
     return res;
   }
 
-  // Admins can access everything
-  if (payload.role === "admin") return NextResponse.next();
+  // Admins and superadmins can access everything
+  if (payload.role === "admin" || payload.role === "superadmin") return NextResponse.next();
 
   // Non-admin API routes: any authenticated user may call them.
-  // Admin-only APIs protect themselves inside the route handler.
   if (isApi) return NextResponse.next();
 
   // Check page-level permissions for non-API routes

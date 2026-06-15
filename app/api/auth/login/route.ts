@@ -5,10 +5,15 @@ import bcrypt from "bcryptjs";
 
 export async function POST(req: NextRequest) {
   try {
-    const { username, password } = await req.json();
+    const { username, password, slug } = await req.json();
     if (!username || !password) return NextResponse.json({ error: "Username and password required" }, { status: 400 });
 
-    const user = await prisma.user.findUnique({ where: { username: username.trim() } });
+    // Look up apartment (default to MPL for backward compat)
+    const aptSlug = slug ?? "mpl";
+    const apartment = await prisma.apartment.findUnique({ where: { slug: aptSlug } });
+    if (!apartment) return NextResponse.json({ error: "League not found" }, { status: 404 });
+
+    const user = await prisma.user.findUnique({ where: { apartmentId_username: { apartmentId: apartment.id, username: username.trim() } } });
     if (!user) return NextResponse.json({ error: "Invalid username or password" }, { status: 401 });
 
     const valid = await bcrypt.compare(password, user.password);
@@ -18,11 +23,11 @@ export async function POST(req: NextRequest) {
     if (user.status === "rejected") return NextResponse.json({ error: "Your account has been rejected." }, { status: 403 });
 
     const permissions: string[] = JSON.parse(user.permissions || "[]");
-    const token = await signToken({ userId: user.id, username: user.username, role: user.role, status: user.status, permissions });
+    const token = await signToken({ userId: user.id, username: user.username, role: user.role, status: user.status, permissions, apartmentId: apartment.id, slug: apartment.slug });
 
     const proto = req.headers.get("x-forwarded-proto") ?? "";
     const isHttps = proto === "https" || process.env.NODE_ENV === "production";
-    const res = NextResponse.json({ ok: true, username: user.username, role: user.role });
+    const res = NextResponse.json({ ok: true, username: user.username, role: user.role, slug: apartment.slug });
     res.cookies.set("mpl-token", token, {
       httpOnly: true,
       secure: isHttps,

@@ -1,9 +1,20 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
-export async function GET() {
+async function getApartmentId(req: NextRequest): Promise<number> {
+  const slug = req.nextUrl.searchParams.get("slug");
+  if (slug) {
+    const apt = await prisma.apartment.findUnique({ where: { slug } });
+    if (apt) return apt.id;
+  }
+  return 1;
+}
+
+export async function GET(req: NextRequest) {
   try {
+    const apartmentId = await getApartmentId(req);
     const matches = await prisma.match.findMany({
+      where: { apartmentId },
       orderBy: { date: "asc" },
       include: {
         batting: { include: { player: true }, where: { dnb: false } },
@@ -11,18 +22,16 @@ export async function GET() {
       },
     });
 
-    // Group matches by YYYY-MM
     const byMonth: Record<string, typeof matches> = {};
     for (const m of matches) {
-      const key = m.date.toISOString().slice(0, 7); // "2026-06"
+      const key = m.date.toISOString().slice(0, 7);
       if (!byMonth[key]) byMonth[key] = [];
       byMonth[key].push(m);
     }
 
     const months = Object.entries(byMonth)
-      .sort(([a], [b]) => b.localeCompare(a)) // newest first
+      .sort(([a], [b]) => b.localeCompare(a))
       .map(([monthKey, monthMatches]) => {
-        // Aggregate batting per player
         const batMap: Record<number, { name: string; runs: number; innings: number }> = {};
         for (const m of monthMatches) {
           for (const b of m.batting) {
@@ -33,7 +42,6 @@ export async function GET() {
         }
         const topBatter = Object.values(batMap).sort((a, b) => b.runs - a.runs)[0] ?? null;
 
-        // Aggregate bowling per player
         const bowlMap: Record<number, { name: string; wickets: number; innings: number }> = {};
         for (const m of monthMatches) {
           for (const b of m.bowling) {

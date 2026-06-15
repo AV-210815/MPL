@@ -8,6 +8,8 @@ export type TokenPayload = {
   role: string;
   status: string;
   permissions: string[];
+  apartmentId: number;
+  slug: string;
 };
 
 export async function signToken(payload: TokenPayload) {

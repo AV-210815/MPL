@@ -27,14 +27,20 @@ async function getHomeData() {
   const totalSixes = matches.flatMap((m) => m.batting).reduce((s, b: BattingStat) => s + b.sixes, 0);
   const totalFours = matches.flatMap((m) => m.batting).reduce((s, b: BattingStat) => s + b.fours, 0);
   const topBatter = players.map((p) => ({ name: p.name, runs: p.batting.reduce((s: number, b: BattingStat) => s + b.runs, 0) })).sort((a, b) => b.runs - a.runs)[0] ?? null;
-  const topBowler = players.map((p) => ({ name: p.name, wickets: p.bowling.reduce((s: number, b: BowlingStat) => s + b.wickets, 0) })).sort((a, b) => b.wickets - a.wickets)[0] ?? null;
+  const topBowler = players.map((p) => {
+    const wickets = p.bowling.reduce((s: number, b: BowlingStat) => s + b.wickets, 0);
+    const overs = p.bowling.reduce((s: number, b: BowlingStat) => s + b.overs, 0);
+    const runsConceded = p.bowling.reduce((s: number, b: BowlingStat) => s + b.runsConceded, 0);
+    const economy = overs > 0 ? runsConceded / overs : Infinity;
+    return { name: p.name, wickets, economy };
+  }).sort((a, b) => b.wickets - a.wickets || a.economy - b.economy)[0] ?? null;
   const latest = matches[0] ?? null;
   return { matchCount: matches.length, totalRuns, totalWickets, totalSixes, totalFours, topBatter, topBowler, latest };
 }
 
 export default async function HomePage() {
   const [{ matchCount, totalRuns, totalWickets, totalSixes, totalFours, topBatter, topBowler, latest }, role] = await Promise.all([getHomeData(), getRole()]);
-  const isAdmin = role === "admin";
+  const isAdmin = role === "admin" || role === "superadmin";
 
   return (
     <div className="relative -mt-6 -mx-4 px-4 pt-0 overflow-hidden">

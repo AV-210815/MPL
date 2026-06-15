@@ -94,27 +94,36 @@ export default function AdminPage() {
       </div>
 
       {/* Header */}
-      <div className="relative pt-10 pb-8">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-          <div className="flex-1">
-            <p className="text-xs uppercase tracking-[0.25em] text-orange-400 font-bold mb-1">Admin</p>
-            <h1 className="text-[5rem] sm:text-[7rem] leading-none bg-gradient-to-br from-orange-300 via-orange-400 to-red-400 bg-clip-text text-transparent"
-              style={{ fontFamily: "var(--font-bebas)", letterSpacing: "0.05em", lineHeight: 1 }}>
-              User<br /><span className="text-white">Management</span>
-            </h1>
-            <p className="text-gray-500 mt-2 text-sm" style={{ fontFamily: "var(--font-rajdhani)", fontWeight: 600 }}>
-              Approve users · Manage roles · Set page permissions
-            </p>
+      <div className="relative pt-8 pb-5">
+        <p className="text-[10px] uppercase tracking-[0.3em] text-orange-400/80 font-bold mb-1.5">Admin</p>
+        <h1 style={{ fontFamily: "var(--font-bebas)", letterSpacing: "0.04em", lineHeight: 1 }}
+          className="text-[2.8rem] sm:text-[3.5rem] leading-none">
+          <span className="bg-gradient-to-br from-orange-300 to-red-400 bg-clip-text text-transparent">User</span>
+          {" "}<span className="text-white">Management</span>
+        </h1>
+        <p className="text-gray-600 mt-1 text-xs">Approve · Roles · Permissions</p>
+        <div className="mt-5 h-px bg-gradient-to-r from-orange-500/30 to-transparent" />
+        {!loading && (
+          <div className="flex gap-3 mt-5 flex-wrap">
+            {[
+              { label: "Pending", count: pending.length, color: "text-yellow-300", bg: "bg-yellow-500/10 border-yellow-500/20" },
+              { label: "Active", count: approved.length, color: "text-green-300", bg: "bg-green-500/10 border-green-500/20" },
+              { label: "Rejected", count: rejected.length, color: "text-red-400", bg: "bg-red-500/10 border-red-500/20" },
+            ].map((s) => (
+              <div key={s.label} className={`flex items-center gap-2 px-3 py-1.5 rounded-full border ${s.bg}`}>
+                <span className={`text-base font-black ${s.color}`} style={{ fontFamily: "var(--font-oswald)" }}>{s.count}</span>
+                <span className="text-xs text-gray-500 font-semibold uppercase tracking-wider">{s.label}</span>
+              </div>
+            ))}
           </div>
-          <div className="text-[7rem] sm:text-[9rem] leading-none select-none shrink-0 self-center opacity-35">
-            ⚙️
-          </div>
-        </div>
-        <div className="mt-6 h-px bg-gradient-to-r from-orange-500/50 via-orange-500/20 to-transparent" />
+        )}
       </div>
 
       {loading ? (
-        <div className="text-center py-20 text-gray-600"><div className="text-4xl mb-3 animate-pulse">⚙️</div><p>Loading users…</p></div>
+        <div className="text-center py-16 text-gray-600">
+          <div className="w-6 h-6 border-2 border-orange-500/30 border-t-orange-400 rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-sm">Loading…</p>
+        </div>
       ) : (
         <div className="relative space-y-8 pb-10">
 

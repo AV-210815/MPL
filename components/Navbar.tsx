@@ -3,16 +3,33 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-const PUBLIC_LINKS = ["/stats", "/bowling", "/mvp", "/explosive", "/profiles"];
+const RESERVED = new Set([
+  "api", "login", "signup", "stats", "bowling", "mvp", "explosive",
+  "profiles", "matches", "players", "admin", "superadmin", "compare", "unauthorized", "apartments",
+  "rivals", "milestones", "standings", "share",
+  "_next", "favicon.ico",
+]);
+
+function isSlugRoute(pathname: string) {
+  const seg = pathname.split("/")[1] ?? "";
+  return seg.length > 0 && !RESERVED.has(seg);
+}
+
+const PUBLIC_LINKS = ["/stats", "/bowling", "/mvp", "/explosive", "/profiles", "/compare", "/rivals", "/milestones", "/standings"];
 
 const links = [
-  { href: "/stats",     label: "🟠 Orange Cap" },
-  { href: "/bowling",   label: "🟣 Purple Cap" },
-  { href: "/mvp",       label: "🏆 MVP" },
-  { href: "/explosive", label: "💥 Explosive" },
-  { href: "/matches",   label: "📋 Matches" },
-  { href: "/profiles",  label: "📊 Profiles" },
-  { href: "/players",   label: "👤 Players" },
+  { href: "/stats",       label: "🟠 Orange Cap",    color: "text-orange-400" },
+  { href: "/bowling",     label: "🟣 Purple Cap",    color: "text-purple-400" },
+  { href: "/mvp",         label: "🏆 MVP",           color: "text-yellow-400" },
+  { href: "/explosive",   label: "💥 Explosive",     color: "text-red-400" },
+  { href: "/rivals",      label: "⚔️ Rivals",        color: "text-red-400" },
+  { href: "/milestones",  label: "🎖️ Milestones",   color: "text-green-400" },
+  { href: "/standings",   label: "📊 Standings",     color: "text-cyan-400" },
+  { href: "/matches",     label: "📋 Matches",       color: "" },
+  { href: "/profiles",    label: "👤 Profiles",      color: "" },
+  { href: "/players",     label: "👥 Players",       color: "" },
+  { href: "/compare",     label: "🔀 Compare",       color: "" },
+  { href: "/apartments",  label: "🏘️ Other Leagues", color: "" },
 ];
 
 export default function Navbar() {
@@ -33,9 +50,10 @@ export default function Navbar() {
   }, [pathname]);
 
   function canSee(href: string) {
+    if (href === "/apartments") return true;
     if (PUBLIC_LINKS.includes(href)) return true;
     if (!username) return false;
-    if (role === "admin") return true;
+    if (role === "admin" || role === "superadmin") return true;
     if (permissions.includes("*")) return true;
     return permissions.some((p) => href === p || href.startsWith(p + "/"));
   }
@@ -47,6 +65,7 @@ export default function Navbar() {
   }
 
   if (pathname === "/login" || pathname === "/signup") return null;
+  if (isSlugRoute(pathname)) return null;
 
   return (
     <nav className="bg-[#0a0a18] border-b border-white/10 sticky top-0 z-50">
@@ -58,17 +77,27 @@ export default function Navbar() {
           {links.filter((l) => canSee(l.href)).map((l) => (
             <Link key={l.href} href={l.href}
               className={`px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
-                pathname === l.href ? "bg-white/15 text-white" : "text-gray-400 hover:text-white hover:bg-white/10"
+                pathname === l.href
+                  ? `bg-white/15 ${l.color || "text-white"}`
+                  : `${l.color || "text-gray-400"} hover:brightness-125 hover:bg-white/10`
               }`}>
               {l.label}
             </Link>
           ))}
-          {role === "admin" && (
+          {(role === "admin" || role === "superadmin") && (
             <Link href="/admin"
               className={`px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
                 pathname === "/admin" ? "bg-orange-500/25 text-orange-300" : "text-orange-500/70 hover:text-orange-400 hover:bg-orange-500/10"
               }`}>
               ⚙️ Admin
+            </Link>
+          )}
+          {role === "superadmin" && (
+            <Link href="/superadmin"
+              className={`px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
+                pathname === "/superadmin" ? "bg-yellow-500/25 text-yellow-300" : "text-yellow-500/70 hover:text-yellow-400 hover:bg-yellow-500/10"
+              }`}>
+              👑 Super
             </Link>
           )}
         </div>
@@ -79,6 +108,7 @@ export default function Navbar() {
                 {username[0].toUpperCase()}
               </div>
               <span className="text-xs text-gray-300 font-medium">{username}</span>
+              {role === "superadmin" && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-yellow-500/20 text-yellow-400 font-bold uppercase">👑 SuperAdmin</span>}
               {role === "admin" && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-orange-500/20 text-orange-400 font-bold uppercase">Admin</span>}
             </div>
             <button onClick={logout}

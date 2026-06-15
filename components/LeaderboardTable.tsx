@@ -17,21 +17,24 @@ function fmt(v: number | null, format?: (v: number | null) => string) {
 }
 
 const medals = ["🥇", "🥈", "🥉"];
-const podiumRings = [
-  "ring-2 ring-yellow-400/60 shadow-[0_0_20px_rgba(234,179,8,0.3)]",
-  "ring-2 ring-gray-400/60 shadow-[0_0_16px_rgba(156,163,175,0.2)]",
-  "ring-2 ring-amber-700/60 shadow-[0_0_16px_rgba(180,83,9,0.2)]",
+const podiumOrder = [1, 0, 2]; // visual left→right: 2nd | 1st | 3rd
+
+const podiumCardBg = [
+  "bg-gradient-to-b from-yellow-500/15 via-yellow-500/8 to-transparent border-yellow-500/30",
+  "bg-gradient-to-b from-gray-400/10 via-gray-400/5 to-transparent border-gray-400/20",
+  "bg-gradient-to-b from-amber-700/12 via-amber-700/6 to-transparent border-amber-700/22",
 ];
-const podiumBg = [
-  "bg-gradient-to-b from-yellow-500/10 to-transparent border-yellow-500/20",
-  "bg-gradient-to-b from-gray-400/8 to-transparent border-gray-400/15",
-  "bg-gradient-to-b from-amber-700/10 to-transparent border-amber-700/20",
+const podiumPlatform = [
+  { height: "h-24 sm:h-28", bg: "bg-gradient-to-b from-yellow-500/50 via-yellow-600/30 to-yellow-700/15", border: "border-t-2 border-yellow-400/70", label: "1ST", labelColor: "text-yellow-300/80", glow: "shadow-[0_-4px_24px_rgba(234,179,8,0.25)]" },
+  { height: "h-16 sm:h-20", bg: "bg-gradient-to-b from-gray-400/35 via-gray-500/20 to-gray-600/10",   border: "border-t-2 border-gray-300/50",   label: "2ND", labelColor: "text-gray-300/70",   glow: "shadow-[0_-3px_16px_rgba(156,163,175,0.18)]" },
+  { height: "h-10 sm:h-14", bg: "bg-gradient-to-b from-amber-700/40 via-amber-800/22 to-amber-900/10", border: "border-t-2 border-amber-600/55",  label: "3RD", labelColor: "text-amber-500/70",  glow: "shadow-[0_-2px_12px_rgba(180,83,9,0.18)]" },
 ];
-const podiumValueColor = [
-  "text-yellow-300",
-  "text-gray-300",
-  "text-amber-500",
+const podiumRing = [
+  "ring-2 ring-yellow-400/70 shadow-[0_0_22px_rgba(234,179,8,0.45)]",
+  "ring-2 ring-gray-400/55 shadow-[0_0_14px_rgba(156,163,175,0.25)]",
+  "ring-2 ring-amber-600/55 shadow-[0_0_14px_rgba(180,83,9,0.25)]",
 ];
+const podiumValueColor = ["text-yellow-300", "text-gray-300", "text-amber-500"];
 
 export default function LeaderboardTable({ rows, columns, accentColor, accentColorLight, rankLabel, primaryKey }: Props) {
   if (!Array.isArray(rows) || rows.length === 0) {
@@ -51,32 +54,54 @@ export default function LeaderboardTable({ rows, columns, accentColor, accentCol
   return (
     <div className="space-y-4">
       {/* ── Podium top 3 ── */}
-      <div className="grid grid-cols-3 gap-3">
-        {top3.map((row, i) => (
-          <div key={String(row.id)}
-            className={`relative flex flex-col items-center gap-2 p-4 rounded-2xl border ${podiumBg[i]} text-center overflow-hidden`}>
-            {/* Glow blob */}
-            <div className="absolute inset-0 opacity-20 blur-2xl rounded-full"
-              style={{ background: i === 0 ? "radial-gradient(circle, #eab308 0%, transparent 70%)" : i === 1 ? "radial-gradient(circle, #9ca3af 0%, transparent 70%)" : "radial-gradient(circle, #b45309 0%, transparent 70%)" }} />
-            <span className="text-2xl relative z-10">{medals[i]}</span>
-            {/* Avatar */}
-            <div className={`relative z-10 w-12 h-12 rounded-full flex items-center justify-center font-black text-lg text-white ${podiumRings[i]}`}
-              style={{ background: accentColorLight }}>
-              {String(row.name)[0].toUpperCase()}
-            </div>
-            <div className="relative z-10">
-              <p className="font-black text-white text-sm leading-tight" style={{ fontFamily: "var(--font-rajdhani)" }}>
-                {String(row.name)}
-              </p>
-              {primaryCol && (
-                <p className={`text-xl font-black mt-0.5 ${podiumValueColor[i]}`} style={{ fontFamily: "var(--font-bebas)", letterSpacing: "0.05em" }}>
-                  {fmt(row[primaryKey] as number | null, primaryCol.format)}
-                  <span className="text-xs text-gray-500 font-normal ml-1">{primaryCol.label}</span>
-                </p>
-              )}
-            </div>
-          </div>
-        ))}
+      <div className="relative pt-4 pb-0">
+        {/* Stage floor glow */}
+        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-3/4 h-8 rounded-full blur-2xl opacity-40 pointer-events-none"
+          style={{ background: `radial-gradient(ellipse, ${accentColor} 0%, transparent 70%)` }} />
+
+        <div className="relative flex items-end justify-center gap-2 sm:gap-3">
+          {podiumOrder.map((rankIdx) => {
+            const row = top3[rankIdx];
+            if (!row) return <div key={rankIdx} className="flex-1" />;
+            const plat = podiumPlatform[rankIdx];
+            return (
+              <div key={String(row.id)} className="flex-1 flex flex-col items-center">
+                {/* Player card — floats above the platform */}
+                <div className={`w-full rounded-t-2xl border ${podiumCardBg[rankIdx]} px-2 py-3 sm:px-3 sm:py-4 flex flex-col items-center gap-1.5 relative overflow-hidden`}>
+                  {rankIdx === 0 && (
+                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-20 h-20 rounded-full bg-yellow-400/10 blur-xl pointer-events-none" />
+                  )}
+                  <span className="text-xl sm:text-2xl relative z-10">{medals[rankIdx]}</span>
+                  <div className={`relative z-10 w-10 h-10 sm:w-14 sm:h-14 rounded-full flex items-center justify-center font-black text-base sm:text-xl text-white ${podiumRing[rankIdx]}`}
+                    style={{ background: `linear-gradient(135deg, ${accentColor}cc, ${accentColorLight})` }}>
+                    {String(row.name)[0].toUpperCase()}
+                  </div>
+                  <div className="relative z-10 text-center">
+                    <p className="font-black text-white text-xs sm:text-sm leading-tight truncate max-w-[72px] sm:max-w-none"
+                      style={{ fontFamily: "var(--font-rajdhani)" }}>
+                      {String(row.name)}
+                    </p>
+                    {primaryCol && (
+                      <p className={`font-black ${podiumValueColor[rankIdx]}`}
+                        style={{ fontFamily: "var(--font-bebas)", letterSpacing: "0.05em", fontSize: rankIdx === 0 ? "1.4rem" : "1.15rem" }}>
+                        {fmt(row[primaryKey] as number | null, primaryCol.format)}
+                        <span className="text-[9px] text-gray-500 font-normal ml-0.5">{primaryCol.label}</span>
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Platform block */}
+                <div className={`w-full ${plat.height} ${plat.bg} ${plat.border} ${plat.glow} flex items-center justify-center`}>
+                  <span className={`text-[9px] sm:text-[10px] font-black tracking-[0.2em] ${plat.labelColor}`}
+                    style={{ fontFamily: "var(--font-oswald)" }}>
+                    {plat.label}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* ── Rest of the table ── */}

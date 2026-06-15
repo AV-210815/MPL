@@ -47,40 +47,29 @@ export default function MVPPage() {
       </div>
 
       {/* Header */}
-      <div className="relative pt-10 pb-8">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-          <div className="flex-1">
-            <p className="text-xs uppercase tracking-[0.25em] text-yellow-500 font-bold mb-1">Monthly Awards</p>
-            <h1 className="text-[5rem] sm:text-[7rem] leading-none bg-gradient-to-br from-yellow-300 via-amber-400 to-orange-400 bg-clip-text text-transparent"
-              style={{ fontFamily: "var(--font-bebas)", letterSpacing: "0.05em", lineHeight: 1 }}>
-              MVP<br /><span className="text-white">Leaderboard</span>
-            </h1>
-            <p className="text-gray-500 mt-2 text-sm" style={{ fontFamily: "var(--font-rajdhani)", fontWeight: 600 }}>
-              Best batting &amp; bowling performer each month
-            </p>
-          </div>
-          {/* Trophy decoration */}
-          <div className="text-[7rem] sm:text-[9rem] leading-none select-none shrink-0 self-center opacity-35">
-            🏆
-          </div>
-        </div>
-        <div className="mt-6 h-px bg-gradient-to-r from-yellow-500/50 via-yellow-500/20 to-transparent" />
+      <div className="relative pt-8 pb-5">
+        <p className="text-[10px] uppercase tracking-[0.3em] text-yellow-500/80 font-bold mb-1.5">Monthly Awards</p>
+        <h1 style={{ fontFamily: "var(--font-bebas)", letterSpacing: "0.04em", lineHeight: 1 }}
+          className="text-[2.8rem] sm:text-[3.5rem] leading-none">
+          <span className="bg-gradient-to-br from-yellow-300 to-amber-500 bg-clip-text text-transparent">MVP</span>
+          {" "}<span className="text-white">Leaderboard</span>
+        </h1>
+        <p className="text-gray-600 mt-1 text-xs">Best batting &amp; bowling performer each month</p>
+        <div className="mt-5 h-px bg-gradient-to-r from-yellow-500/30 to-transparent" />
       </div>
 
       {loading ? (
-        <div className="text-center py-20 text-gray-600">
-          <div className="text-4xl mb-3 animate-pulse">🏆</div>
-          <p>Loading awards…</p>
+        <div className="text-center py-16 text-gray-600">
+          <div className="w-6 h-6 border-2 border-yellow-500/30 border-t-yellow-400 rounded-full animate-spin mx-auto mb-3" />
+          <p className="text-sm">Loading…</p>
         </div>
       ) : loadError ? (
-        <div className="text-center py-20 text-gray-600 border border-red-500/10 rounded-2xl bg-red-500/[0.03]">
-          <div className="text-4xl mb-3">⚠️</div>
+        <div className="text-center py-16 text-gray-600 border border-red-500/10 rounded-2xl bg-red-500/[0.03]">
           <p className="font-semibold text-red-400">Failed to load awards.</p>
           <button onClick={load} className="mt-3 text-xs text-gray-500 hover:text-gray-300 underline">Try again</button>
         </div>
       ) : data.length === 0 ? (
-        <div className="text-center py-20 text-gray-600 border border-white/5 rounded-2xl bg-white/[0.02]">
-          <div className="text-4xl mb-3">📭</div>
+        <div className="text-center py-16 text-gray-600 border border-white/5 rounded-2xl bg-white/[0.02]">
           <p className="font-semibold">No matches yet.</p>
         </div>
       ) : (
@@ -95,12 +84,17 @@ export default function MVPPage() {
               )}
 
               {/* Month header */}
-              <div className="flex items-center justify-between px-5 py-3.5 border-b border-white/8 bg-gradient-to-r from-white/5 to-transparent">
+              <div className={`flex items-center justify-between px-5 py-3.5 border-b border-white/8 ${idx === 0 ? "bg-gradient-to-r from-yellow-500/8 to-transparent" : "bg-gradient-to-r from-white/5 to-transparent"}`}>
                 <div className="flex items-center gap-3">
                   {idx === 0 && <span className="text-lg">🏆</span>}
                   <span className="font-black text-white text-lg" style={{ fontFamily: "var(--font-bebas)", letterSpacing: "0.08em" }}>
                     {m.month}
                   </span>
+                  {idx === 0 && (
+                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-yellow-500/20 border border-yellow-500/30 text-yellow-400 font-bold uppercase tracking-wider">
+                      Latest
+                    </span>
+                  )}
                 </div>
                 <span className="text-xs text-gray-600 bg-white/5 px-2.5 py-1 rounded-full border border-white/8">
                   {m.matches} match{m.matches !== 1 ? "es" : ""}
